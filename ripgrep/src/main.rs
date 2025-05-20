@@ -12,9 +12,23 @@ struct Config {
 }
 
 impl Config {
-    pub fn new(args: &[String]) -> Result<Config, &'static str> {
+    pub fn from_iterator(mut args: impl Iterator<Item = String>) -> Result<Config, &'static str> {
+        args.next();
+        let Some(query) = args.next() else {
+            return Err("Usage: ripgrep <query> [filename|-]");
+        };
+
+        let ignore_case = env::var("IGNORE_CASE").is_ok();
+
+        Ok(Config {
+            query,
+            filename: args.next(),
+            ignore_case,
+        })
+    }
+    pub fn from_slice(args: &[String]) -> Result<Config, &'static str> {
         if args.len() < 2 {
-            return Err("Wrong argument count");
+            return Err("Usage: ripgrep <query> [filename|-]");
         }
 
         let ignore_case = if let Ok(_) = env::var("IGNORE_CASE") {
@@ -50,27 +64,17 @@ fn read_pipe() -> io::Result<String> {
     Ok(String::from(contents))
 }
 
-fn search<'a>(query: &str, content: &'a str, lowercase: bool) -> Vec<&'a str> {
-    let mut result = Vec::new();
-    for line in content.lines() {
-        if lowercase && line.to_lowercase().contains(query) {
-            result.push(line);
-        } else if line.contains(query) {
-            result.push(line);
-        }
-    }
-    result
+fn search<'a>(query: &str, content: &'a str, case_insensitive: bool) -> Vec<&'a str> {
+    content.lines().filter(|line|
+        line.contains(query) || (case_insensitive && line.to_lowercase().contains(query))
+    ).collect()
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    let config = Config::new(&args).unwrap_or_else(|e| {
+    let config = Config::from_iterator(env::args()).unwrap_or_else(|e| {
         println!("Error parsing arguments: {e}");
         std::process::exit(1);
     });
-
-    println!("{:?}", config);
 
     let content = match config.filename {
         Some(filename) => read_file(&filename).unwrap_or_else(|e| {
