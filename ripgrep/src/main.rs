@@ -78,8 +78,7 @@ fn main() {
             std::process::exit(1);
         }),
         None => read_pipe().unwrap_or_else(|e| {
-            println!("Error reading from pipe: {e}");
-            std::process::exit(1);
+            std::process::exit(0);
         }),
     };
 
