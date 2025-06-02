@@ -33,7 +33,7 @@ fn handle_connection(stream: TcpStream) {
         }
     };
 
-    let lines: Vec<String> = msg_string.split('\n')
+    let lines: Vec<String> = msg_string.split_terminator("\r\n")
         .map(|s| s.to_string())
         .collect();
 
@@ -44,6 +44,6 @@ fn handle_connection(stream: TcpStream) {
             return;
         }
     };
-
     println!("{:?}", msg);
+    let _  = msg.save().map_err(|e| println!("Error saving message: {e}"));
 }
