@@ -1,26 +1,41 @@
 use message::message::Message;
-use std::{
-    io::BufReader,
-    io::Read,
-    net::{TcpListener, TcpStream},
-};
+use tokio::io::AsyncReadExt;
+use tokio::net::{TcpListener, TcpStream};
+
+use crate::message::user;
+
 mod message;
 
-fn main() {
-    let listener = TcpListener::bind("127.0.0.1:8085").unwrap();
-
-    for steam in listener.incoming() {
-        let stream = steam.unwrap();
-        println!("Connection established!");
-        handle_connection(stream);
-    }
+#[tokio::main]
+async fn main() {
+    let send_handle = tokio::spawn(async {
+        let send_listener = TcpListener::bind("127.0.0.1:8085").await.unwrap();
+        loop {
+            let (socket, _) = send_listener.accept().await.unwrap();
+            println!("Connection established!");
+            tokio::spawn(async move {
+                let _ = handle_connection(socket).await;
+            });
+        }
+    });
+    let receiver_handle = tokio::spawn(async {
+        let receive_listener = TcpListener::bind("127.0.0.1:8086").await.unwrap();
+        loop {
+            let (socket, _) = receive_listener.accept().await.unwrap();
+            println!("Receive Connection established!");
+            tokio::spawn(async move {
+                let _ = handle_receive(socket).await;
+            });
+        }
+    });
+    send_handle.await.unwrap();
+    receiver_handle.await.unwrap()
 }
 
-fn handle_connection(stream: TcpStream) {
-    let mut buf_reader = BufReader::new(&stream);
+async fn handle_connection(mut stream: TcpStream) {
+    // let mut buf_reader = BufReader::new(stream.read()?);
     let mut msg_contents = Vec::new();
-
-    if let Err(e) = buf_reader.read_to_end(&mut msg_contents) {
+    if let Err(e) = stream.read_to_end(&mut msg_contents).await {
         println!("Error reading msg: {e}");
         return;
     }
@@ -33,7 +48,8 @@ fn handle_connection(stream: TcpStream) {
         }
     };
 
-    let lines: Vec<String> = msg_string.split_terminator("\r\n")
+    let lines: Vec<String> = msg_string
+        .split_terminator("\r\n")
         .map(|s| s.to_string())
         .collect();
 
@@ -45,5 +61,18 @@ fn handle_connection(stream: TcpStream) {
         }
     };
     println!("{:?}", msg);
-    let _  = msg.save().map_err(|e| println!("Error saving message: {e}"));
+    let _ = msg
+        .save()
+        .map_err(|e| println!("Error saving message: {e}"));
+}
+
+async fn handle_receive(mut stream: TcpStream) {
+    let mut username_buf = Vec::new();
+    stream.read_to_end(&mut username_buf).await.unwrap();
+    let user = user::User::from(String::from_utf8(username_buf).unwrap());
+    println!("User create: {:?}", user);
+    let inbox = user.get_inbox();
+    for msg in inbox {
+        println!("{:?}", msg);
+    }
 }
