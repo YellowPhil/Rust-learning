@@ -1,0 +1,9 @@
+[package]
+name = "job-queue"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+fastrand = "2.3.0"
+tokio = { version = "1.45.1", features = ["full"] }
+tokio-util = "0.7.15"
